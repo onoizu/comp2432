@@ -1,0 +1,8 @@
+[package]
+name = "blaze_app"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+blaze_core = { path = "../blaze_core" }
+blaze_sim = { path = "../blaze_sim" }
