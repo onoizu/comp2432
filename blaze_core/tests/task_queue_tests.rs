@@ -93,6 +93,22 @@ fn shutdown_unblocks_waiting_threads() {
 }
 
 #[test]
+fn has_urgent_pending_reflects_queue_state() {
+    let queue = TaskQueue::new();
+
+    assert!(!queue.has_urgent_pending());
+
+    queue.push_task(Task::new(TaskPriority::Normal, TaskKind::Delivery, ZoneId::WardA, 10));
+    assert!(!queue.has_urgent_pending());
+
+    queue.push_task(Task::new(TaskPriority::Urgent, TaskKind::Emergency, ZoneId::Lobby, 10));
+    assert!(queue.has_urgent_pending());
+
+    let _ = queue.pop_task_blocking().unwrap();
+    assert!(!queue.has_urgent_pending());
+}
+
+#[test]
 fn remaining_tasks_drained_after_shutdown() {
     let queue = TaskQueue::new();
 

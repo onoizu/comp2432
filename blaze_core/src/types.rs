@@ -8,9 +8,10 @@ pub type RobotId = usize;
 /// Unique identifier for a task.
 pub type TaskId = u64;
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
+
+
+
+/// Constants
 
 /// How long a robot may be silent before the monitor marks it offline (ms).
 pub const DEFAULT_HEARTBEAT_TIMEOUT_MS: u64 = 3000;
@@ -21,9 +22,10 @@ pub const DEFAULT_HEARTBEAT_INTERVAL_MS: u64 = 500;
 /// How often the monitor thread scans for timed-out robots (ms).
 pub const DEFAULT_MONITOR_INTERVAL_MS: u64 = 1000;
 
-// ---------------------------------------------------------------------------
-// ZoneId
-// ---------------------------------------------------------------------------
+
+
+
+/// ZoneId
 
 /// Identifies a physical zone inside the hospital.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -60,9 +62,10 @@ impl fmt::Display for ZoneId {
     }
 }
 
-// ---------------------------------------------------------------------------
-// TaskPriority
-// ---------------------------------------------------------------------------
+
+
+
+/// TaskPriority
 
 /// Priority level of a task. Urgent tasks are dequeued before normal ones.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,9 +83,8 @@ impl fmt::Display for TaskPriority {
     }
 }
 
-// ---------------------------------------------------------------------------
-// TaskKind
-// ---------------------------------------------------------------------------
+
+/// TaskKind
 
 /// The type of work a task represents.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -104,9 +106,9 @@ impl fmt::Display for TaskKind {
     }
 }
 
-// ---------------------------------------------------------------------------
-// RobotStatus
-// ---------------------------------------------------------------------------
+
+
+/// RobotStatus
 
 /// Whether a robot is considered alive by the health monitor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

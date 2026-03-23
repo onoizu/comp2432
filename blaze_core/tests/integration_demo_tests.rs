@@ -91,12 +91,14 @@ fn timeout_demo_detects_offline() {
     coord.spawn_robot(1, None);
     coord.spawn_robot(2, Some(Arc::clone(&fail_flag)));
 
-    coord.submit_task(Task::new(
-        TaskPriority::Normal,
-        TaskKind::Delivery,
-        ZoneId::Lobby,
-        50,
-    ));
+    for _ in 0..3 {
+        coord.submit_task(Task::new(
+            TaskPriority::Normal,
+            TaskKind::Delivery,
+            ZoneId::Lobby,
+            50,
+        ));
+    }
 
     thread::sleep(Duration::from_millis(100));
     fail_flag.store(true, Ordering::Relaxed);
@@ -109,6 +111,67 @@ fn timeout_demo_detects_offline() {
     let log = coord.event_log();
     let has_timeout = log.has_event(|e| matches!(e, EventKind::RobotTimedOut { robot_id: 2 }));
     assert!(has_timeout, "robot 2 should have been logged as timed out");
+
+    coord.shutdown();
+}
+
+/// Cooperative preemption: a single robot running a preemptible Normal task
+/// yields when an Urgent task is pushed, completes the Urgent task first,
+/// then finishes the reclaimed Normal task.
+#[test]
+fn cooperative_preemption_yields_for_urgent() {
+    let mut coord = Coordinator::new(Duration::from_secs(10));
+    coord.start_monitor();
+    coord.spawn_robot(0, None);
+
+    let normal = Task::new(TaskPriority::Normal, TaskKind::Delivery, ZoneId::WardA, 5000);
+    let normal_id = normal.id;
+    coord.submit_task(normal);
+
+    thread::sleep(Duration::from_millis(1500));
+
+    let urgent = Task::new(TaskPriority::Urgent, TaskKind::Emergency, ZoneId::WardB, 500);
+    let urgent_id = urgent.id;
+    coord.submit_task(urgent);
+
+    thread::sleep(Duration::from_millis(8000));
+
+    let log = coord.event_log();
+    let events = log.events();
+
+    let has_yield = events.iter().any(|e| {
+        matches!(e, EventKind::TaskYielded { robot_id: 0, task_id } if *task_id == normal_id)
+    });
+    assert!(has_yield, "robot 0 should yield the Normal task when Urgent arrives");
+
+    let urgent_completed = events.iter().any(|e| {
+        matches!(e, EventKind::TaskCompleted { task_id, .. } if *task_id == urgent_id)
+    });
+    assert!(urgent_completed, "Urgent task should be completed");
+
+    let normal_completed = events.iter().any(|e| {
+        matches!(e, EventKind::TaskCompleted { task_id, .. } if *task_id == normal_id)
+    });
+    assert!(normal_completed, "reclaimed Normal task should eventually complete");
+
+    let yield_idx = events.iter().position(|e| {
+        matches!(e, EventKind::TaskYielded { task_id, .. } if *task_id == normal_id)
+    }).unwrap();
+    let urgent_complete_idx = events.iter().position(|e| {
+        matches!(e, EventKind::TaskCompleted { task_id, .. } if *task_id == urgent_id)
+    }).unwrap();
+    let normal_complete_idx = events.iter().position(|e| {
+        matches!(e, EventKind::TaskCompleted { task_id, .. } if *task_id == normal_id)
+    }).unwrap();
+
+    assert!(
+        yield_idx < urgent_complete_idx,
+        "yield should happen before Urgent completes"
+    );
+    assert!(
+        urgent_complete_idx < normal_complete_idx,
+        "Urgent should complete before reclaimed Normal"
+    );
 
     coord.shutdown();
 }

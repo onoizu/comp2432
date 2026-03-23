@@ -1,103 +1,50 @@
-//! Entry point for the Project Blaze demo.
+//! Entry point for Project Blaze.
 //!
-//! Runs three scenarios sequentially, printing the structured event log
-//! after each one.
+//! Supports two modes:
+//! - `cargo run -- --web`  → launches the local web dashboard
+//! - `cargo run`           → runs the original terminal demo
 
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::thread;
-use std::time::Duration;
-
-use blaze_core::coordinator::Coordinator;
-use blaze_core::types::DEFAULT_HEARTBEAT_TIMEOUT_MS;
+use std::path::Path;
 
 fn main() {
-    run_basic_delivery();
-    run_zone_conflict();
-    run_timeout_demo();
+    let args: Vec<String> = std::env::args().collect();
+
+    if args.iter().any(|a| a == "--web") {
+        let port = args
+            .iter()
+            .position(|a| a == "--port")
+            .and_then(|i| args.get(i + 1))
+            .and_then(|v| v.parse::<u16>().ok())
+            .unwrap_or(3000);
+        blaze_app::server::start_server(port);
+    } else {
+        run_terminal_demo();
+    }
 }
 
-// -----------------------------------------------------------------------
-// Scenario runners
-// -----------------------------------------------------------------------
+fn run_terminal_demo() {
+    let scenarios = blaze_sim::demo::default_scenarios();
+    let mut reports = Vec::new();
+    let output_root = Path::new("output");
 
-fn run_basic_delivery() {
+    for scenario in scenarios {
+        let report = blaze_sim::demo::run_scenario_with_export(scenario, 400, output_root)
+            .expect("failed to run scenario and export report");
+        reports.push(report);
+    }
+
     println!("========================================");
-    println!(" Scenario 1: Basic Delivery");
-    println!("========================================\n");
-
-    let timeout = Duration::from_millis(DEFAULT_HEARTBEAT_TIMEOUT_MS);
-    let mut coord = Coordinator::new(timeout);
-    coord.start_monitor();
-    coord.spawn_robots(3);
-
-    for task in blaze_sim::scenarios::basic_delivery() {
-        coord.submit_task(task);
-    }
-
-    thread::sleep(Duration::from_millis(800));
-
-    let log = coord.event_log();
-    coord.shutdown();
-    print!("{}", log.dump());
-    println!();
-}
-
-fn run_zone_conflict() {
+    println!(" Demo Summary");
     println!("========================================");
-    println!(" Scenario 2: Zone Conflict");
-    println!("========================================\n");
-
-    let timeout = Duration::from_millis(DEFAULT_HEARTBEAT_TIMEOUT_MS);
-    let mut coord = Coordinator::new(timeout);
-    coord.start_monitor();
-    coord.spawn_robots(3);
-
-    for task in blaze_sim::scenarios::zone_conflict() {
-        coord.submit_task(task);
+    for report in &reports {
+        println!(
+            "Scenario: {} | completed={} waits={} offline={} runtime={:?}ms",
+            report.scenario_name,
+            report.metrics.total_completed_tasks,
+            report.metrics.total_zone_wait_events,
+            report.metrics.total_offline_detections,
+            report.metrics.runtime_ms
+        );
     }
-
-    thread::sleep(Duration::from_millis(1500));
-
-    let log = coord.event_log();
-    coord.shutdown();
-    print!("{}", log.dump());
-    println!();
-}
-
-fn run_timeout_demo() {
-    println!("========================================");
-    println!(" Scenario 3: Timeout Demo");
-    println!("========================================\n");
-
-    let timeout = Duration::from_millis(DEFAULT_HEARTBEAT_TIMEOUT_MS);
-    let mut coord = Coordinator::new(timeout);
-    coord.start_monitor();
-
-    let (tasks, fail_robot_id) = blaze_sim::scenarios::timeout_demo();
-    let robot_count = 3;
-
-    let fail_flag = Arc::new(AtomicBool::new(false));
-
-    for id in 0..robot_count {
-        if id == fail_robot_id {
-            coord.spawn_robot(id, Some(Arc::clone(&fail_flag)));
-        } else {
-            coord.spawn_robot(id, None);
-        }
-    }
-
-    for task in tasks {
-        coord.submit_task(task);
-    }
-
-    thread::sleep(Duration::from_millis(200));
-    fail_flag.store(true, Ordering::Relaxed);
-
-    thread::sleep(Duration::from_millis(DEFAULT_HEARTBEAT_TIMEOUT_MS + 2000));
-
-    let log = coord.event_log();
-    coord.shutdown();
-    print!("{}", log.dump());
-    println!();
+    println!("Exports written under ./output");
 }

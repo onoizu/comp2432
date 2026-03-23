@@ -16,7 +16,7 @@ pub trait TaskProvider {
     /// Block the calling thread until a task is available.
     ///
     /// Returns `None` only after [`shutdown`](TaskProvider::shutdown) has been
-    /// called **and** no tasks remain.
+    /// called and no tasks remain.
     fn pop_task_blocking(&self) -> Option<Task>;
 
     /// Signal that no more tasks will arrive.
@@ -64,7 +64,7 @@ pub trait HeartbeatRegistry {
     /// Scan all registered robots and mark any that have exceeded the
     /// heartbeat timeout as `Offline`.
     ///
-    /// Returns the IDs of robots that were **newly** marked offline during
+    /// Returns the IDs of robots that were newly marked offline during
     /// this call (robots already offline are not included).
     fn check_timeouts(&self) -> Vec<RobotId>;
 }

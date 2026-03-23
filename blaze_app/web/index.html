@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Blaze — Dashboard</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <header>
+        <div class="header-left">
+            <span class="logo">&#x1F3E5;</span>
+            <h1>Project Blaze</h1>
+            <span class="subtitle">Hospital Robot Coordination Core</span>
+        </div>
+        <div class="header-right">
+            <select id="scenario-select">
+                <option value="">-- Select Scenario --</option>
+            </select>
+            <label class="manual-check">
+                <input type="checkbox" id="manual-mode-cb"> Step-by-step
+            </label>
+            <button id="start-btn">&#x25B6; Start</button>
+            <div class="time-controls" id="time-controls">
+                <button id="pause-btn" title="Pause">&#x23F8;</button>
+                <button id="step-btn" title="Step +1 event">+1</button>
+                <button id="resume-btn" title="Resume">&#x25B6;</button>
+                <span id="time-mode-badge" class="time-badge">Auto</span>
+            </div>
+            <span id="status-indicator" class="status-dot idle"></span>
+            <span id="status-text">Idle</span>
+        </div>
+    </header>
+
+    <main>
+        <div class="top-row">
+            <section class="card" id="queue-panel">
+                <h2>&#x1F4E6; Task Queue</h2>
+                <div class="queue-stats">
+                    <div class="stat">
+                        <span class="stat-label">Total</span>
+                        <span class="stat-value" id="q-all">0</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">&#x23F3; Pending</span>
+                        <span class="stat-value" id="q-total">0</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">&#x1F504; In Progress</span>
+                        <span class="stat-value" id="q-progress">0</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">&#x2705; Completed</span>
+                        <span class="stat-value" id="q-done">0</span>
+                    </div>
+                </div>
+                <div class="queue-task-list" id="queue-task-list"></div>
+            </section>
+
+            <section class="card" id="metrics-panel">
+                <h2>&#x1F4CA; Metrics</h2>
+                <div class="metrics-grid">
+                    <div class="metric">
+                        <span class="metric-value" id="m-completed">0</span>
+                        <span class="metric-label">Completed</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-value" id="m-waits">0</span>
+                        <span class="metric-label">Wait Events</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-value" id="m-offline">0</span>
+                        <span class="metric-label">Offline</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-value" id="m-runtime">—</span>
+                        <span class="metric-label">Runtime (ms)</span>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <section class="card" id="zones-panel">
+            <h2>&#x1F3E5; Hospital Zones</h2>
+            <div class="zones-grid" id="zones-container">
+                <p class="placeholder">Start a scenario to see zones</p>
+            </div>
+        </section>
+
+        <section class="card" id="robots-panel">
+            <h2>&#x1F916; Robots</h2>
+            <div class="robots-list" id="robots-container">
+                <p class="placeholder">Start a scenario to see robots</p>
+            </div>
+        </section>
+
+        <section class="card" id="events-panel">
+            <h2>&#x1F4DC; Event Timeline</h2>
+            <div class="timeline-wrapper" id="timeline-wrapper">
+                <div class="timeline-container" id="timeline-container">
+                    <p class="placeholder">No events yet</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <span>COMP2432 — Project Blaze &middot; Concurrency &middot; Synchronization &middot; Coordination</span>
+    </footer>
+
+    <script src="/app.js"></script>
+</body>
+</html>

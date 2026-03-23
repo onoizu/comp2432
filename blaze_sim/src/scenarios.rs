@@ -6,50 +6,67 @@
 use blaze_core::task::Task;
 use blaze_core::types::{TaskKind, TaskPriority, ZoneId};
 
-/// Basic delivery scenario — several tasks spread across different zones.
+/// Basic delivery scenario — 3 tasks in different zones, 1 urgent.
 ///
-/// Good for demonstrating that multiple robots execute tasks concurrently
-/// without data races.
+/// Demonstrates parallel execution and priority scheduling.
 pub fn basic_delivery() -> Vec<Task> {
     vec![
-        Task::new(TaskPriority::Normal, TaskKind::Delivery, ZoneId::WardA, 100),
-        Task::new(TaskPriority::Normal, TaskKind::Cleaning, ZoneId::WardB, 80),
-        Task::new(TaskPriority::Normal, TaskKind::Inspection, ZoneId::Lobby, 120),
-        Task::new(TaskPriority::Urgent, TaskKind::Emergency, ZoneId::EmergencyRoom, 60),
-        Task::new(TaskPriority::Normal, TaskKind::Delivery, ZoneId::PharmacyHall, 90),
+        Task::new(TaskPriority::Urgent, TaskKind::Emergency, ZoneId::EmergencyRoom, 40),
+        Task::new(TaskPriority::Normal, TaskKind::Delivery, ZoneId::WardA, 50),
+        Task::new(TaskPriority::Normal, TaskKind::Cleaning, ZoneId::WardB, 50),
     ]
 }
 
-/// Zone-conflict scenario — multiple tasks target the same zone.
+/// Zone-conflict scenario — 3 tasks all target WardA.
 ///
-/// Demonstrates that zone mutual exclusion works: only one robot can be
-/// inside `WardA` at a time while others block and wait.
+/// Demonstrates mutex: only one robot enters at a time, others wait.
 pub fn zone_conflict() -> Vec<Task> {
     vec![
-        Task::new(TaskPriority::Normal, TaskKind::Delivery, ZoneId::WardA, 150),
-        Task::new(TaskPriority::Normal, TaskKind::Cleaning, ZoneId::WardA, 150),
-        Task::new(TaskPriority::Urgent, TaskKind::Emergency, ZoneId::WardA, 100),
-        Task::new(TaskPriority::Normal, TaskKind::Inspection, ZoneId::WardA, 120),
+        Task::new(TaskPriority::Normal, TaskKind::Delivery, ZoneId::WardA, 60),
+        Task::new(TaskPriority::Normal, TaskKind::Cleaning, ZoneId::WardA, 60),
+        Task::new(TaskPriority::Urgent, TaskKind::Emergency, ZoneId::WardA, 40),
     ]
 }
 
-/// Timeout demo scenario.
+/// Timeout demo scenario — staggered two-phase design.
 ///
-/// Returns a task list together with the robot index that should receive a
-/// `fail_flag`.  The coordinator should spawn that robot with
-/// `Some(fail_flag)` and set the flag to `true` after a short delay so the
-/// health monitor marks it offline.
+/// Phase 1: R0 and R1 receive `initial_tasks` and enter their zones.
+/// Phase 2: After a delay, R2 is spawned and receives `late_task` (WardB).
+///          WardB is already occupied by R0, so R2 must wait. R2 then times
+///          out, reclaims the task, and another robot re-executes it.
 ///
 /// # Returns
 ///
-/// `(tasks, fail_robot_id)` where `fail_robot_id` is the `RobotId` of
-/// the robot that will be injected with a failure.
-pub fn timeout_demo() -> (Vec<Task>, usize) {
-    let tasks = vec![
-        Task::new(TaskPriority::Normal, TaskKind::Delivery, ZoneId::Lobby, 200),
-        Task::new(TaskPriority::Normal, TaskKind::Cleaning, ZoneId::WardB, 200),
-        Task::new(TaskPriority::Normal, TaskKind::Inspection, ZoneId::PharmacyHall, 200),
+/// `(initial_tasks, late_task, fail_robot_id)`
+pub fn timeout_demo() -> (Vec<Task>, Task, usize) {
+    let initial_tasks = vec![
+        Task::new(TaskPriority::Normal, TaskKind::Delivery, ZoneId::WardB, 5000),
+        Task::new(TaskPriority::Normal, TaskKind::Cleaning, ZoneId::WardA, 5000),
     ];
+    let late_task = Task::new(TaskPriority::Normal, TaskKind::Inspection, ZoneId::WardB, 3000);
     let fail_robot_id = 2;
-    (tasks, fail_robot_id)
+    (initial_tasks, late_task, fail_robot_id)
 }
+
+/// Cooperative preemption demo — single robot, delayed Urgent.
+///
+/// Phase 1: R0 receives a long preemptible Normal task (WardA, 5000ms).
+/// Phase 2: After ~2000ms, an Urgent Emergency task (WardB, 1000ms) is pushed.
+///          R0 detects the Urgent task during periodic interrupt checks,
+///          cooperatively yields the Normal task, completes the Urgent task,
+///          then picks up the reclaimed Normal and finishes it.
+///
+/// Demonstrates cooperative priority scheduling and interruptible execution
+/// of low-priority work.
+///
+/// # Returns
+///
+/// `(initial_tasks, late_urgent_task)`
+pub fn cooperative_preemption_demo() -> (Vec<Task>, Task) {
+    let initial_tasks = vec![
+        Task::new(TaskPriority::Normal, TaskKind::Delivery, ZoneId::WardA, 5000),
+    ];
+    let late_urgent = Task::new(TaskPriority::Urgent, TaskKind::Emergency, ZoneId::WardB, 1000);
+    (initial_tasks, late_urgent)
+}
+
