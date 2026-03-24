@@ -6,6 +6,10 @@
 //! string matching.
 //!
 //! Lock order: 4 (TaskQueue < ZoneManager < HealthMonitor < EventLog < StepGate).
+//!
+//! Keep [`EventLog::log`] work bounded: callers should not hold lower-numbered
+//! mutexes when logging if avoidable, and the implementation should stay free of
+//! I/O or nested locks so the event mutex stays a short critical section.
 
 use std::fmt;
 use std::sync::Mutex;

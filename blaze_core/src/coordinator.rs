@@ -9,6 +9,12 @@
 //! Global lock order:
 //! TaskQueue < ZoneManager < HealthMonitor < EventLog < StepGate
 //! All components must acquire locks only in this order and never in reverse.
+//!
+//! Also avoid blocking or nested lock acquisition while holding any of those
+//! mutexes (no sleep, join, I/O, or heavy logging in critical sections). The
+//! heartbeat-aware wait helpers in `TaskQueue`, `ZoneManager`, and `StepGate`
+//! drop their mutex before calling `on_wait` so liveness updates do not extend
+//! unrelated critical sections.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};

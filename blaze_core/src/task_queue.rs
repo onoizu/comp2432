@@ -5,6 +5,14 @@
 //! arrives or the queue is shut down.
 //!
 //! Lock order: 1 (TaskQueue < ZoneManager < HealthMonitor < EventLog < StepGate).
+//!
+//! Deadlock-related rule: while holding this queue's [`Mutex`], do not sleep,
+//! join, block on I/O, take other subsystem locks, or do heavy work. The only
+//! blocking wait allowed here is [`Condvar::wait`] / [`Condvar::wait_timeout`]
+//! on this queue's condvar (they release the mutex during the wait). After a
+//! timed wake, [`pop_task_blocking_with_heartbeat`] drops the guard before
+//! calling `on_wait` so heartbeat can update the health monitor without holding
+//! the queue mutex.
 
 use std::collections::VecDeque;
 use std::sync::{Condvar, Mutex};
@@ -117,13 +125,16 @@ impl TaskQueue {
     /// Block until a task is available or the queue is shut down.
     /// While waiting, calls `on_wait` periodically so the caller can send
     /// heartbeats and avoid being marked offline.
+    ///
+    /// `on_wait` runs only after the queue mutex is released, so it may take
+    /// other locks (e.g. the health monitor) without nesting inside this one.
     pub fn pop_task_blocking_with_heartbeat<F>(&self, mut on_wait: F) -> Option<Task>
     where
         F: FnMut(),
     {
         let timeout = Duration::from_millis(DEFAULT_HEARTBEAT_INTERVAL_MS);
-        let mut guard = self.inner.lock().expect("task queue lock poisoned");
         loop {
+            let mut guard = self.inner.lock().expect("task queue lock poisoned");
             if let Some(task) = guard.urgent.pop_front() {
                 return Some(task);
             }
@@ -137,7 +148,7 @@ impl TaskQueue {
                 .condvar
                 .wait_timeout(guard, timeout)
                 .expect("task queue lock poisoned");
-            guard = g;
+            drop(g);
             on_wait();
         }
     }

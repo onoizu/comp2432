@@ -192,7 +192,7 @@ pub fn run_scenario(scenario: DemoScenario, snapshot_interval_ms: u64) -> Scenar
 
     let fail_flag = Arc::new(AtomicBool::new(false));
 
-    /// Phase 1: start non-failing robots first, then submit initial tasks.
+    // Phase 1: start non-failing robots first, then submit initial tasks.
     for id in 0..scenario.robot_count {
         if scenario.fail_robot_id == Some(id) {
             continue;
@@ -203,7 +203,7 @@ pub fn run_scenario(scenario: DemoScenario, snapshot_interval_ms: u64) -> Scenar
         coord.submit_task(task);
     }
 
-    /// Phase 2: after delay, start failing robot and submit late tasks.
+    // Phase 2: after delay, start failing robot and submit late tasks.
     if let Some(delay) = scenario.late_delay_ms {
         thread::sleep(Duration::from_millis(delay));
     }

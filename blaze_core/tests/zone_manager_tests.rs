@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
@@ -58,4 +58,54 @@ fn different_zones_occupied_simultaneously() {
     assert!(zm.is_occupied(ZoneId::WardB));
     assert!(zm.leave_zone(ZoneId::WardA, 0).is_ok());
     assert!(zm.leave_zone(ZoneId::WardB, 1).is_ok());
+}
+
+#[test]
+fn enter_zone_with_timeout_aborts_when_on_wait_false() {
+    let zm = Arc::new(ZoneManager::new());
+    zm.enter_zone(ZoneId::WardA, 0);
+
+    let zm2 = Arc::clone(&zm);
+    let handle = thread::spawn(move || {
+        zm2.enter_zone_with_timeout(
+            ZoneId::WardA,
+            1,
+            Duration::from_millis(20),
+            || false,
+        )
+    });
+
+    assert!(!handle.join().unwrap(), "on_wait false should abort enter");
+
+    let row = zm
+        .snapshot()
+        .into_iter()
+        .find(|z| z.zone == ZoneId::WardA)
+        .unwrap();
+    assert!(
+        !row.waiting_robots.contains(&1),
+        "robot 1 should be removed from waiting after abort"
+    );
+    let _ = zm.leave_zone(ZoneId::WardA, 0);
+}
+
+#[test]
+fn enter_zone_with_heartbeat_enters_after_release() {
+    let zm = Arc::new(ZoneManager::new());
+    zm.enter_zone(ZoneId::Lobby, 0);
+
+    let zm2 = Arc::clone(&zm);
+    let entered = Arc::new(AtomicBool::new(false));
+    let entered2 = Arc::clone(&entered);
+    let handle = thread::spawn(move || {
+        let ok = zm2.enter_zone_with_heartbeat(ZoneId::Lobby, 1, || true);
+        entered2.store(ok, Ordering::SeqCst);
+        let _ = zm2.leave_zone(ZoneId::Lobby, 1);
+    });
+
+    thread::sleep(Duration::from_millis(50));
+    assert!(!entered.load(Ordering::SeqCst));
+    let _ = zm.leave_zone(ZoneId::Lobby, 0);
+    handle.join().unwrap();
+    assert!(entered.load(Ordering::SeqCst));
 }

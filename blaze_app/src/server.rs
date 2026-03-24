@@ -78,7 +78,7 @@ impl AppState {
 
         let fail_flag = Arc::new(AtomicBool::new(false));
 
-        /// Phase 1: start non-failing robots first, then submit initial tasks.
+        // Phase 1: start non-failing robots first, then submit initial tasks.
         for robot_id in 0..scenario.robot_count {
             if scenario.fail_robot_id == Some(robot_id) {
                 continue;
@@ -89,7 +89,7 @@ impl AppState {
             coord.submit_task(task);
         }
 
-        /// Phase 2: after delay, start failing robot and submit late tasks.
+        // Phase 2: after delay, start failing robot and submit late tasks.
         if let Some(delay) = scenario.late_delay_ms {
             thread::sleep(Duration::from_millis(delay));
         }
@@ -100,7 +100,7 @@ impl AppState {
             coord.submit_task(task);
         }
 
-        /// `fail_after_ms` starts counting from here (after Phase 2).
+        // `fail_after_ms` starts counting from here (after Phase 2).
         if let Some(after_ms) = scenario.fail_after_ms {
             let ff = Arc::clone(&fail_flag);
             thread::spawn(move || {

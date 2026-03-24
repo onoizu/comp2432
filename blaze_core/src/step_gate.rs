@@ -5,6 +5,10 @@
 //! the web dashboard for step-by-step demonstration mode.
 //!
 //! Lock order: 5 (TaskQueue < ZoneManager < HealthMonitor < EventLog < StepGate).
+//!
+//! Do not call `on_wait` (or any code that may block or take other locks) while
+//! holding [`StepGate`]'s mutex. [`wait_before_event_with_heartbeat`] drops the
+//! guard after each timed wait before invoking the callback.
 
 use std::sync::{Condvar, Mutex};
 use std::time::Duration;
@@ -59,22 +63,28 @@ impl StepGate {
 
     /// Block until allowed to emit one event, calling `on_wait` periodically
     /// while waiting so the caller can send heartbeats.
+    ///
+    /// `on_wait` runs only after releasing the step-gate mutex so heartbeat
+    /// does not nest inside this lock.
     pub fn wait_before_event_with_heartbeat<F>(&self, mut on_wait: F)
     where
         F: FnMut(),
     {
         let timeout = Duration::from_millis(500);
-        let mut guard = self.state.lock().expect("step gate lock poisoned");
-        while guard.paused && guard.steps_remaining == 0 {
+        loop {
+            let mut guard = self.state.lock().expect("step gate lock poisoned");
+            if !(guard.paused && guard.steps_remaining == 0) {
+                if guard.paused && guard.steps_remaining > 0 {
+                    guard.steps_remaining -= 1;
+                }
+                return;
+            }
             let (g, _) = self
                 .condvar
                 .wait_timeout(guard, timeout)
                 .expect("step gate wait");
-            guard = g;
+            drop(g);
             on_wait();
-        }
-        if guard.paused && guard.steps_remaining > 0 {
-            guard.steps_remaining -= 1;
         }
     }
 

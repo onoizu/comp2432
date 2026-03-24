@@ -5,6 +5,12 @@
 //! leaves.
 //!
 //! Lock order: 2 (TaskQueue < ZoneManager < HealthMonitor < EventLog < StepGate).
+//!
+//! Same rule as [`crate::task_queue::TaskQueue`]: no blocking, nested locks,
+//! or heavy work while holding this [`Mutex`], except waiting on this struct's
+//! [`Condvar`]. [`enter_zone_with_timeout`] runs `on_wait` only after releasing
+//! the mutex; [`enter_zone_with_heartbeat`] is a thin wrapper with the default
+//! heartbeat interval.
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Condvar, Mutex};
@@ -84,50 +90,93 @@ impl ZoneManager {
         rows
     }
 
-    /// Block until `zone` is free, then mark it as owned by `robot`.
-    /// While waiting, calls `on_wait` periodically. If `on_wait` returns `false`,
-    /// aborts the wait (e.g. robot was marked offline) and returns `false`.
-    /// Returns `true` if the robot successfully entered the zone.
-    pub fn enter_zone_with_heartbeat<F>(&self, zone: ZoneId, robot: RobotId, mut on_wait: F) -> bool
+    /// Tries to enter a zone with periodic timeout-based waiting.
+    ///
+    /// Returns `true` if the robot successfully enters the zone, or `false` if
+    /// the caller stops waiting (`on_wait` returns false), e.g. robot offline.
+    ///
+    /// Design notes:
+    /// - Shared zone state is only mutated while this mutex is held.
+    /// - `on_wait` always runs without holding the zone lock, so heartbeat and
+    ///   similar callbacks do not extend the critical section or nest locks.
+    /// - Waiters are appended to the visible waiting queue before blocking so
+    ///   snapshots and UI stay consistent.
+    pub fn enter_zone_with_timeout<F>(
+        &self,
+        zone: ZoneId,
+        robot: RobotId,
+        timeout: Duration,
+        mut on_wait: F,
+    ) -> bool
     where
         F: FnMut() -> bool,
     {
-        let timeout = Duration::from_millis(DEFAULT_HEARTBEAT_INTERVAL_MS);
-        let mut guard = self.inner.lock().expect("zone manager lock poisoned");
-        while guard.occupancy[&zone].is_some() {
-            let waiting = guard.waiting.get_mut(&zone).expect("zone waiting missing");
-            if !waiting.contains(&robot) {
-                waiting.push_back(robot);
-            }
-            let (g, _) = self
-                .condvar
-                .wait_timeout(guard, timeout)
-                .expect("zone manager lock poisoned");
-            guard = g;
+        loop {
+            let should_wait = {
+                let mut guard = self.inner.lock().expect("zone manager lock poisoned");
+
+                if guard.occupancy[&zone].is_none() {
+                    false
+                } else {
+                    let waiting = guard
+                        .waiting
+                        .get_mut(&zone)
+                        .expect("zone waiting missing");
+
+                    if !waiting.contains(&robot) {
+                        waiting.push_back(robot);
+                    }
+
+                    let (_guard, _) = self
+                        .condvar
+                        .wait_timeout(guard, timeout)
+                        .expect("zone manager lock poisoned");
+                    true
+                }
+            };
+
             if !on_wait() {
-                guard
-                    .waiting
-                    .get_mut(&zone)
-                    .expect("zone waiting missing")
-                    .retain(|&id| id != robot);
+                let mut guard = self.inner.lock().expect("zone manager lock poisoned");
+                Self::remove_waiting_locked(&mut guard, zone, robot);
                 return false;
             }
+
+            if should_wait {
+                continue;
+            }
+
+            let mut guard = self.inner.lock().expect("zone manager lock poisoned");
+
+            if guard.occupancy[&zone].is_some() {
+                continue;
+            }
+
+            Self::remove_waiting_locked(&mut guard, zone, robot);
+            guard.occupancy.insert(zone, Some(robot));
+            return true;
         }
-        if !on_wait() {
-            guard
-                .waiting
-                .get_mut(&zone)
-                .expect("zone waiting missing")
-                .retain(|&id| id != robot);
-            return false;
-        }
+    }
+
+    /// Same as [`Self::enter_zone_with_timeout`] with `DEFAULT_HEARTBEAT_INTERVAL_MS`.
+    pub fn enter_zone_with_heartbeat<F>(&self, zone: ZoneId, robot: RobotId, on_wait: F) -> bool
+    where
+        F: FnMut() -> bool,
+    {
+        self.enter_zone_with_timeout(
+            zone,
+            robot,
+            Duration::from_millis(DEFAULT_HEARTBEAT_INTERVAL_MS),
+            on_wait,
+        )
+    }
+
+    /// Remove `robot` from `zone`'s waiting queue. Caller must hold the mutex.
+    fn remove_waiting_locked(guard: &mut ZoneManagerInner, zone: ZoneId, robot: RobotId) {
         guard
             .waiting
             .get_mut(&zone)
             .expect("zone waiting missing")
             .retain(|&id| id != robot);
-        guard.occupancy.insert(zone, Some(robot));
-        true
     }
 }
 

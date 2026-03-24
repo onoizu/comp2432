@@ -37,7 +37,7 @@ fn scenario_export_writes_json_file() {
     assert!(content.contains("\"metrics\""));
     assert_eq!(report.scenario_name, "Export Test");
 
-    /// Verify unified field names match web API schema.
+    // Verify unified field names match web API schema.
     assert!(
         content.contains("\"completed_task_count\""),
         "export should use unified field name completed_task_count"

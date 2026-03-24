@@ -79,9 +79,9 @@ pub fn robot_worker(
     event_log.log(EventKind::RobotStarted { robot_id: id });
 
     loop {
-        /// Critical sync point: keep step gate before `pop`.
-        /// That keeps `pop` and `TaskReceived` in one release and avoids a
-        /// brief UI mismatch where task is gone but receive event is not shown.
+        // Critical sync point: keep step gate before `pop`.
+        // That keeps `pop` and `TaskReceived` in one release and avoids a
+        // brief UI mismatch where task is gone but receive event is not shown.
         maybe_wait(&step_gate, &mut send_heartbeat);
         let task = match task_queue.pop_task_blocking_with_heartbeat(&mut send_heartbeat) {
             Some(t) => t,
@@ -166,10 +166,10 @@ pub fn robot_worker(
         });
         health_monitor.update_zone(id, Some(zone));
 
-        /// Interruptible low-priority execution.
-        /// During chunked sleep, the worker checks:
-        /// 1) offline status -> reclaim and stop
-        /// 2) urgent pending on preemptible Normal task -> yield and requeue
+        // Interruptible low-priority execution.
+        // During chunked sleep, the worker checks:
+        // 1) offline status -> reclaim and stop
+        // 2) urgent pending on preemptible Normal task -> yield and requeue
         let should_yield = preemptible && priority == TaskPriority::Normal;
         let result = sleep_with_interrupt_check(
             duration,
@@ -181,7 +181,7 @@ pub fn robot_worker(
 
         match result {
             InterruptReason::Offline => {
-                /// Offline reclamation path (unchanged from before).
+                // Offline reclamation path (unchanged from before).
                 maybe_wait(&step_gate, &mut send_heartbeat);
                 let _ = zone_manager.leave_zone(zone, id);
                 event_log.log(EventKind::ZoneLeft {
@@ -209,9 +209,12 @@ pub fn robot_worker(
             }
 
             InterruptReason::Yielded => {
-                /// Cooperative yield path:
-                /// release zone -> log yield -> requeue at front -> clear state.
-                /// Yielded tasks restart from the beginning.
+                // Design simplification:
+                // yielded tasks are requeued as restartable work units rather than resumed
+                // from partial progress. This keeps the scheduling logic simple and explicit.
+                //
+                // Cooperative yield path:
+                // release zone -> log yield -> requeue at front -> clear state.
                 maybe_wait(&step_gate, &mut send_heartbeat);
                 let _ = zone_manager.leave_zone(zone, id);
                 event_log.log(EventKind::ZoneLeft {
@@ -234,12 +237,12 @@ pub fn robot_worker(
 
                 health_monitor.update_task(id, None);
 
-                /// Do NOT stop — loop back to pop the Urgent task.
+                // loop back to pop the urgent task.
                 continue;
             }
 
             InterruptReason::Completed => {
-                /// Normal completion path.
+                // Normal completion path.
                 maybe_wait(&step_gate, &mut send_heartbeat);
                 let _ = zone_manager.leave_zone(zone, id);
                 event_log.log(EventKind::ZoneLeft {
@@ -301,9 +304,9 @@ where
             return InterruptReason::Offline;
         }
 
-        /// OS concept demonstrated: cooperative priority scheduling.
-        ///The robot checks whether higher-priority work has arrived. 
-        /// Only preemptible Normal tasks participate — Urgent tasks and non-preemptible Normal tasks run to completion uninterrupted.
+        // Cooperative priority scheduling check.
+        // The robot checks whether higher-priority work has arrived.
+        // Only preemptible Normal tasks participate; Urgent and non-preemptible Normal run to completion.
         if yield_enabled && task_queue.has_urgent_pending() {
             return InterruptReason::Yielded;
         }
