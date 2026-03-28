@@ -1,24 +1,29 @@
-//! Unified error type for Project Blaze.
+//! Error types used by the Blaze core.
 //!
-//! Only operations that genuinely can fail surface errors here.  Lock
-//! poisoning is treated as unrecoverable and handled via `.expect()` at
-//! call sites rather than being propagated through this type.
+//! We keep this enum small on purpose: only domain-level failures are
+//! represented here. Internal lock poisoning is treated as fatal and is not
+//! passed around as a normal recoverable error.
 
 use std::fmt;
 
 use crate::types::{RobotId, ZoneId};
 
-/// Errors that can occur during Blaze operations.
+/// Errors that can happen during normal Blaze operations.
 #[derive(Debug)]
 pub enum BlazeError {
-    /// A robot tried to leave a zone it does not currently own.
+
+    /// The robot tried to leave a zone owned by someone else.
     ZoneNotOwned {
         zone: ZoneId,
         robot: RobotId,
     },
-    /// An operation referenced a robot that has not been registered.
+
+    /// The requested robot ID was never registered in the system.
     RobotNotRegistered(RobotId),
 }
+
+
+
 
 impl fmt::Display for BlazeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

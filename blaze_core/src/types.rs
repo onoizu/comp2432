@@ -1,11 +1,11 @@
-//! Shared type aliases, enums, and constants used throughout Project Blaze.
+//! Shared IDs, enums, and constants used across Blaze.
 
 use std::fmt;
 
-/// Unique identifier for a robot worker thread.
+/// Numeric ID for a robot worker.
 pub type RobotId = usize;
 
-/// Unique identifier for a task.
+/// Numeric ID for a task.
 pub type TaskId = u64;
 
 
@@ -13,13 +13,13 @@ pub type TaskId = u64;
 
 /// Constants
 
-/// How long a robot may be silent before the monitor marks it offline (ms).
+/// Max silence time before a robot is marked offline (milliseconds).
 pub const DEFAULT_HEARTBEAT_TIMEOUT_MS: u64 = 3000;
 
-/// How often a healthy robot sends a heartbeat (ms).
+/// How often a healthy robot sends a heartbeat (milliseconds).
 pub const DEFAULT_HEARTBEAT_INTERVAL_MS: u64 = 500;
 
-/// How often the monitor thread scans for timed-out robots (ms).
+/// How often the monitor checks for timed-out robots (milliseconds).
 pub const DEFAULT_MONITOR_INTERVAL_MS: u64 = 1000;
 
 
@@ -27,7 +27,7 @@ pub const DEFAULT_MONITOR_INTERVAL_MS: u64 = 1000;
 
 /// ZoneId
 
-/// Identifies a physical zone inside the hospital.
+/// A physical hospital zone that a robot can enter.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ZoneId {
     EmergencyRoom,
@@ -38,7 +38,7 @@ pub enum ZoneId {
 }
 
 impl ZoneId {
-    /// Returns a slice containing every `ZoneId` variant.
+    /// Returns every zone as a fixed list.
     pub fn all() -> &'static [ZoneId] {
         &[
             ZoneId::EmergencyRoom,
@@ -67,7 +67,7 @@ impl fmt::Display for ZoneId {
 
 /// TaskPriority
 
-/// Priority level of a task. Urgent tasks are dequeued before normal ones.
+/// Task priority. Urgent tasks are always taken before normal tasks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TaskPriority {
     Urgent,
@@ -86,7 +86,7 @@ impl fmt::Display for TaskPriority {
 
 /// TaskKind
 
-/// The type of work a task represents.
+/// What kind of work the robot should do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TaskKind {
     Delivery,
@@ -110,7 +110,7 @@ impl fmt::Display for TaskKind {
 
 /// RobotStatus
 
-/// Whether a robot is considered alive by the health monitor.
+/// Current liveness state reported by the health monitor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RobotStatus {
     Online,

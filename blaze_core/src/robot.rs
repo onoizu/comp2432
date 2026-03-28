@@ -1,8 +1,7 @@
-//! Robot worker thread logic.
-//! The public entry point is [`robot_worker`], which is meant to be called
-//! inside `std::thread::spawn`.  It loops: fetch a task, enter the target
-//! zone, simulate work, leave the zone, and repeat until the queue shuts
-//! down.
+//! Robot worker loop.
+//!
+//! A worker repeatedly gets a task, enters the target zone, sleeps to simulate
+//! work, then leaves the zone. The loop ends when the queue is shut down.
 //!
 //! OS concept demonstrated: cooperative priority scheduling.
 //! Robots executing preemptible Normal tasks periodically check whether an
@@ -26,6 +25,10 @@ use crate::traits::{HeartbeatRegistry, ZoneAccess};
 use crate::types::{RobotId, RobotStatus, TaskPriority, DEFAULT_HEARTBEAT_INTERVAL_MS};
 use crate::zone_manager::ZoneManager;
 
+
+
+
+
 /// Result of the interruptible work sleep.
 enum InterruptReason {
     /// The robot was marked offline by the health monitor.
@@ -39,20 +42,24 @@ enum InterruptReason {
     Completed,
 }
 
-/// Run the main loop for a single robot worker.
+
+
+
+/// Runs the main loop for one robot.
 ///
-/// This function is designed to be called inside `std::thread::spawn`.
-/// It returns when the task queue is shut down and drained.
+/// Usually called inside `std::thread::spawn`. It returns when shutdown is
+/// requested and no tasks are left.
 ///
-/// Parameters:
-/// `id` is the robot identifier.
-/// `task_queue` provides incoming tasks.
-/// `zone_manager` controls zone ownership.
-/// `health_monitor` tracks liveness and status.
-/// `event_log` records structured events.
-/// `metrics` collects runtime counters.
-/// `fail_flag` lets tests simulate a crash by stopping heartbeats.
-/// `step_gate` optionally pauses before each event for manual stepping.
+/// # Arguments
+///
+/// * `id` — Unique robot ID.
+/// * `task_queue` — Shared queue for incoming tasks.
+/// * `zone_manager` — Shared zone lock manager.
+/// * `health_monitor` — Shared heartbeat/health registry.
+/// * `event_log` — Shared event log.
+/// * `metrics` — Shared runtime metrics.
+/// * `fail_flag` — Optional failure switch for the timeout demo.
+/// * `step_gate` — Optional pause before each event for manual stepping.
 pub fn robot_worker(
     id: RobotId,
     task_queue: Arc<TaskQueue>,
@@ -79,6 +86,8 @@ pub fn robot_worker(
     event_log.log(EventKind::RobotStarted { robot_id: id });
 
     loop {
+
+
         // Critical sync point: keep step gate before `pop`.
         // That keeps `pop` and `TaskReceived` in one release and avoids a
         // brief UI mismatch where task is gone but receive event is not shown.
@@ -90,6 +99,8 @@ pub fn robot_worker(
                 return;
             }
         };
+
+
 
         health_monitor.register(id);
 
@@ -111,6 +122,9 @@ pub fn robot_worker(
             robot_id: id,
             task_id,
         });
+
+
+
 
         health_monitor.update_task(id, Some(task_id));
 
@@ -179,6 +193,8 @@ pub fn robot_worker(
             &task_queue,
         );
 
+
+
         match result {
             InterruptReason::Offline => {
                 // Offline reclamation path (unchanged from before).
@@ -207,6 +223,8 @@ pub fn robot_worker(
                 event_log.log(EventKind::RobotStopped { robot_id: id });
                 return;
             }
+
+
 
             InterruptReason::Yielded => {
                 // Design simplification:
@@ -241,6 +259,7 @@ pub fn robot_worker(
                 continue;
             }
 
+
             InterruptReason::Completed => {
                 // Normal completion path.
                 maybe_wait(&step_gate, &mut send_heartbeat);
@@ -272,6 +291,8 @@ where
         g.wait_before_event_with_heartbeat(on_wait);
     }
 }
+
+
 
 /// Sleep for `duration_ms` in small chunks while sending heartbeats.
 ///

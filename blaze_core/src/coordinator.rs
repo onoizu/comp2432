@@ -1,9 +1,6 @@
-//! Top-level coordinator that wires all subsystems together.
-//!
-//! The [`Coordinator`] owns the shared task queue, zone manager, health
-//! monitor, and event log.  It spawns robot worker threads and a
-//! background health-monitor thread, and provides a clean shutdown
-//! sequence.
+//! This is the "control center" of Blaze. It owns shared services, starts
+//! worker threads, starts timeout monitoring, and shuts everything down cleanly.
+//! The architecture stays intentionally minimal, following the Project-B brief.
 //!
 //! Deadlock prevention via global lock ordering.
 //! Global lock order:
@@ -36,7 +33,7 @@ use crate::traits::{HeartbeatRegistry, TaskProvider};
 use crate::types::{RobotId, RobotStatus, DEFAULT_MONITOR_INTERVAL_MS};
 use crate::zone_manager::ZoneManager;
 
-/// Orchestrates the entire Blaze system.
+/// Orchestrates the whole Blaze runtime.
 pub struct Coordinator {
     task_queue: Arc<TaskQueue>,
     zone_manager: Arc<ZoneManager>,
@@ -49,11 +46,11 @@ pub struct Coordinator {
     monitor_shutdown: Arc<AtomicBool>,
 }
 
+
 impl Coordinator {
-    /// Create a new coordinator.
+    /// Creates a new coordinator with fresh shared state.
     ///
-    /// `heartbeat_timeout` is how long a robot may stay silent before
-    /// being considered offline.
+    /// * `heartbeat_timeout` — Max silence time before a robot is offline.
     pub fn new(heartbeat_timeout: Duration) -> Self {
         Self {
             task_queue: Arc::new(TaskQueue::new()),
@@ -73,11 +70,12 @@ impl Coordinator {
         self.step_gate = Some(gate);
     }
 
-    /// Spawn a single robot worker thread.
+
+
+    /// Spawns one robot worker thread.
     ///
-    /// `id` is the robot identifier.
-    /// `fail_flag` optionally injects failure. When set to true, the robot
-    /// stops sending heartbeats.
+    /// * `id` — Robot ID.
+    /// * `fail_flag` — Optional failure switch used in timeout demos.
     pub fn spawn_robot(&mut self, id: RobotId, fail_flag: Option<Arc<AtomicBool>>) {
         let tq = Arc::clone(&self.task_queue);
         let zm = Arc::clone(&self.zone_manager);
@@ -92,18 +90,21 @@ impl Coordinator {
         self.robot_handles.push(handle);
     }
 
-    /// Convenience: spawn `count` normal robots (IDs `0..count`, no fail
-    /// flag).
+
+
+    /// Convenience helper to spawn `count` normal robots (`0..count`).
     pub fn spawn_robots(&mut self, count: usize) {
         for id in 0..count {
             self.spawn_robot(id, None);
         }
     }
 
-    /// Start the background health-monitor thread.
+
+
+    /// Starts the background monitor thread.
     ///
-    /// The thread periodically calls `check_timeouts` and logs any newly
-    /// offline robots.  It exits once `monitor_shutdown` is set.
+    /// The monitor checks timeouts on a fixed interval and logs newly offline
+    /// robots. It exits once `monitor_shutdown` is set.
     pub fn start_monitor(&mut self) {
         let hm = Arc::clone(&self.health_monitor);
         let el = Arc::clone(&self.event_log);
@@ -127,12 +128,17 @@ impl Coordinator {
         self.monitor_handle = Some(handle);
     }
 
-    /// Submit a task to the queue.
+
+
+    /// Submits one task to the shared queue.
     pub fn submit_task(&self, task: Task) {
         self.task_queue.push_task(task);
     }
 
-    /// Shut down the system gracefully.
+
+
+
+    /// Shuts down the system in a safe order.
     ///
     /// 1. Signals the monitor thread to stop.
     /// 2. Shuts down the task queue (workers drain remaining tasks then
@@ -152,7 +158,9 @@ impl Coordinator {
         self.event_log.log(EventKind::SystemShutdown);
     }
 
-    /// Return a reference-counted handle to the event log.
+
+
+
     pub fn event_log(&self) -> Arc<EventLog> {
         Arc::clone(&self.event_log)
     }
@@ -162,12 +170,10 @@ impl Coordinator {
         Arc::clone(&self.metrics)
     }
 
-    /// Return a reference-counted handle to the health monitor.
     pub fn health_monitor(&self) -> Arc<HealthMonitor> {
         Arc::clone(&self.health_monitor)
     }
 
-    /// Return a reference-counted handle to the task queue.
     pub fn task_queue(&self) -> Arc<TaskQueue> {
         Arc::clone(&self.task_queue)
     }
@@ -177,6 +183,10 @@ impl Coordinator {
         Arc::clone(&self.zone_manager)
     }
 
+
+
+
+    
     /// Build a read-only snapshot for terminal dashboard rendering.
     pub fn snapshot(&self) -> SystemSnapshot {
         let queue_raw = self.task_queue.snapshot();

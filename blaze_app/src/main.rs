@@ -1,8 +1,7 @@
-//! Entry point for Project Blaze.
+//! CLI entry point for the Blaze demo.
 //!
-//! Supports two modes:
-//! - `cargo run -- --web`  → launches the local web dashboard
-//! - `cargo run`           → runs the original terminal demo
+//! `cargo run -- -- web` ：launches the local web dashboard.
+//! `cargo run` runs the default scenarios one by one and prints their event logs (and writes exports under `./output`).
 
 use std::path::Path;
 

@@ -10,6 +10,7 @@ use std::time::Instant;
 
 use crate::types::{RobotId, ZoneId};
 
+
 /// Immutable metrics snapshot used by presenters and exporters.
 #[derive(Debug, Clone)]
 pub struct MetricsSnapshot {
@@ -39,6 +40,7 @@ pub struct Metrics {
     inner: Mutex<MetricsInner>,
 }
 
+
 impl Metrics {
     /// Create a new empty metrics collector.
     pub fn new() -> Self {
@@ -55,6 +57,7 @@ impl Metrics {
         guard.runtime_ms = None;
     }
 
+
     /// Mark the end of a scenario run and compute runtime.
     pub fn end_scenario(&self) {
         let mut guard = self.inner.lock().expect("metrics lock poisoned");
@@ -63,7 +66,7 @@ impl Metrics {
         }
     }
 
-    /// Record one completed task for `robot_id`.
+    /// Record one completed task for robot_id
     pub fn record_task_completed(&self, robot_id: RobotId) {
         let mut guard = self.inner.lock().expect("metrics lock poisoned");
         guard.total_completed_tasks += 1;
@@ -71,7 +74,7 @@ impl Metrics {
         *entry += 1;
     }
 
-    /// Record one zone waiting event.
+    /// Record one zone waiting event
     pub fn record_zone_wait(&self, _robot_id: RobotId, zone_id: ZoneId) {
         let mut guard = self.inner.lock().expect("metrics lock poisoned");
         guard.total_zone_wait_events += 1;
@@ -79,13 +82,14 @@ impl Metrics {
         *entry += 1;
     }
 
-    /// Record one offline detection event.
+    /// Record one offline detection event
     pub fn record_robot_offline(&self, _robot_id: RobotId) {
         let mut guard = self.inner.lock().expect("metrics lock poisoned");
         guard.total_offline_detections += 1;
     }
 
-    /// Return an immutable snapshot of all collected metrics.
+    
+    /// Return an immutable snapshot of all collected metrics
     pub fn snapshot(&self) -> MetricsSnapshot {
         let guard = self.inner.lock().expect("metrics lock poisoned");
         MetricsSnapshot {

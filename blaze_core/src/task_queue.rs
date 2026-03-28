@@ -1,8 +1,8 @@
-//! Thread-safe two-level priority task queue.
+//! Thread-safe queue with two priority levels.
 //!
-//! Urgent tasks are always dequeued before normal ones.  When both levels
-//! are empty the calling thread blocks on a [`Condvar`] until new work
-//! arrives or the queue is shut down.
+//! Urgent tasks are always popped before normal tasks. If the queue is empty,
+//! workers wait until a task arrives or shutdown begins.
+//! This is the "task queue" part of the Project-B minimal scope.
 //!
 //! Lock order: 1 (TaskQueue < ZoneManager < HealthMonitor < EventLog < StepGate).
 //!
@@ -21,6 +21,8 @@ use std::time::Duration;
 use crate::task::Task;
 use crate::traits::TaskProvider;
 use crate::types::{TaskId, TaskKind, TaskPriority, ZoneId, DEFAULT_HEARTBEAT_INTERVAL_MS};
+
+
 
 /// Per-task metadata exposed in queue snapshots.
 #[derive(Debug, Clone)]
@@ -42,7 +44,7 @@ pub struct TaskQueueSnapshot {
     pub tasks: Vec<QueuedTaskInfo>,
 }
 
-/// Internal state protected by a [`Mutex`].
+/// Internal queue state protected by a mutex.
 struct TaskQueueInner {
     urgent: VecDeque<Task>,
     normal: VecDeque<Task>,
@@ -50,18 +52,14 @@ struct TaskQueueInner {
     shutdown: bool,
 }
 
-/// A thread-safe, two-level priority task queue.
-///
-/// Workers call [`pop_task_blocking`](TaskProvider::pop_task_blocking) to
-/// obtain work.  The call blocks until a task is available or the queue has
-/// been shut down and drained.
+/// Shared queue used by all worker threads.
 pub struct TaskQueue {
     inner: Mutex<TaskQueueInner>,
     condvar: Condvar,
 }
 
 impl TaskQueue {
-    /// Create an empty task queue.
+    /// Creates an empty queue.
     pub fn new() -> Self {
         Self {
             inner: Mutex::new(TaskQueueInner {
@@ -100,7 +98,10 @@ impl TaskQueue {
         }
     }
 
-    /// OS concept demonstrated: priority-based task yielding trigger.
+
+
+
+    /// OS concept: priority-based task yielding trigger.
     ///
     /// Robots executing preemptible Normal tasks periodically call this to
     /// decide whether to cooperatively yield. A `true` return means at least
@@ -110,6 +111,8 @@ impl TaskQueue {
         let guard = self.inner.lock().expect("task queue lock poisoned");
         !guard.urgent.is_empty()
     }
+
+
 
     /// Put a task back at the front of its priority queue (reclamation).
     /// Does NOT increment `total_pushed` since the task was already counted.
@@ -121,6 +124,8 @@ impl TaskQueue {
         }
         self.condvar.notify_one();
     }
+
+
 
     /// Block until a task is available or the queue is shut down.
     /// While waiting, calls `on_wait` periodically so the caller can send
@@ -153,6 +158,9 @@ impl TaskQueue {
         }
     }
 }
+
+
+
 
 impl TaskProvider for TaskQueue {
     fn push_task(&self, task: Task) {

@@ -1,23 +1,21 @@
-//! Task definition and factory.
+//! Task data type and constructor.
 
 use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::types::{TaskId, TaskKind, TaskPriority, ZoneId};
 
-/// Monotonically increasing counter used by [`Task::new`].
+/// Global counter used to assign unique task IDs.
 static NEXT_TASK_ID: AtomicU64 = AtomicU64::new(1);
 
-/// A unit of work that a robot can execute.
-///
-/// Tasks are moved by ownership through the system — they are pushed into
-/// the queue and popped out without cloning.
+
+/// A task includes priority, job type, target zone, and simulated duration.
 pub struct Task {
     pub id: TaskId,
     pub priority: TaskPriority,
     pub kind: TaskKind,
     pub target_zone: ZoneId,
-    /// Simulated duration of this task in milliseconds.
+    /// Simulated work duration in milliseconds.
     pub duration_ms: u64,
     /// If true, this task may yield when urgent work appears.
     /// Only Normal tasks use this. Urgent tasks are never interrupted.
@@ -25,16 +23,18 @@ pub struct Task {
     pub preemptible: bool,
 }
 
+
 impl Task {
-    /// Create a new task with an auto-incremented ID.
+    /// Creates a task and auto-assigns a new ID.
     /// Normal tasks default to preemptible; Urgent tasks default to
     /// non-preemptible.
     ///
-    /// Parameters:
-    /// `priority` sets urgent vs normal.
-    /// `kind` sets the work category.
-    /// `target_zone` sets where the work runs.
-    /// `duration_ms` sets simulated runtime in milliseconds.
+    /// # Arguments
+    ///
+    /// * `priority` — Urgent or normal.
+    /// * `kind` — Work category.
+    /// * `target_zone` — Where the work happens.
+    /// * `duration_ms` — Simulated work time in milliseconds.
     pub fn new(
         priority: TaskPriority,
         kind: TaskKind,
@@ -50,6 +50,7 @@ impl Task {
             preemptible: priority == TaskPriority::Normal,
         }
     }
+    
 
     /// Create a task with an explicit preemption policy.
     /// Use this when a Normal task must not be interrupted 

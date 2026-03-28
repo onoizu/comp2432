@@ -1,8 +1,7 @@
 //! Lightweight local HTTP server for the Blaze web dashboard.
 //!
 //! Uses only `std::net::TcpListener` — no external HTTP crate needed.
-//! All endpoints are read-only views of core state plus a controlled
-//! scenario-start trigger.
+//! All endpoints are read-only views of core state plus a controlled scenario-start trigger.
 
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};

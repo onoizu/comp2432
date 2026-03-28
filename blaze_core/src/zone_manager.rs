@@ -1,8 +1,8 @@
 //! Zone access control with mutual exclusion.
 //!
-//! At most one robot may occupy a given zone at any time.  A robot that
-//! tries to enter an occupied zone blocks until the current occupant
-//! leaves.
+//! Only one robot may be inside a zone at a time. If a zone is busy, other
+//! robots wait until it is released.
+//! This directly targets the PDF requirement: no two robots in one zone.
 //!
 //! Lock order: 2 (TaskQueue < ZoneManager < HealthMonitor < EventLog < StepGate).
 //!
@@ -12,6 +12,7 @@
 //! the mutex; [`enter_zone_with_heartbeat`] is a thin wrapper with the default
 //! heartbeat interval.
 
+
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Condvar, Mutex};
 use std::time::Duration;
@@ -20,10 +21,8 @@ use crate::errors::BlazeError;
 use crate::traits::ZoneAccess;
 use crate::types::{RobotId, ZoneId, DEFAULT_HEARTBEAT_INTERVAL_MS};
 
-/// Manages exclusive access to hospital zones.
-///
-/// Each zone is either free (`None`) or occupied by exactly one robot
-/// (`Some(robot_id)`).
+
+/// Manages who currently owns each hospital zone.
 pub struct ZoneManager {
     inner: Mutex<ZoneManagerInner>,
     condvar: Condvar,
@@ -42,8 +41,11 @@ pub struct ZoneStateSnapshot {
     pub waiting_robots: Vec<RobotId>,
 }
 
+
+
+
 impl ZoneManager {
-    /// Create a new manager with all zones initially free.
+    /// Creates a manager with all zones initially free.
     pub fn new() -> Self {
         let mut occupancy = HashMap::new();
         let mut waiting = HashMap::new();
@@ -70,6 +72,7 @@ impl ZoneManager {
         }
     }
 
+
     /// Return immutable snapshots for every zone, including waiting robots.
     pub fn snapshot(&self) -> Vec<ZoneStateSnapshot> {
         let guard = self.inner.lock().expect("zone manager lock poisoned");
@@ -89,6 +92,8 @@ impl ZoneManager {
         }
         rows
     }
+
+
 
     /// Tries to enter a zone with periodic timeout-based waiting.
     ///
@@ -179,6 +184,9 @@ impl ZoneManager {
             .retain(|&id| id != robot);
     }
 }
+
+
+
 
 impl ZoneAccess for ZoneManager {
     fn enter_zone(&self, zone: ZoneId, robot: RobotId) {

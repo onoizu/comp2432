@@ -1,9 +1,7 @@
-//! Structured, thread-safe event log.
+//! Thread-safe event log.
 //!
-//! Every significant action in the system (task received, zone entered,
-//! robot timed out, etc.) is recorded as an [`Event`] with a typed
-//! [`EventKind`].  This makes test assertions stable and avoids fragile
-//! string matching.
+//! Important actions are recorded as typed events (`EventKind`) instead of
+//! raw strings. This keeps tests and debugging more reliable.
 //!
 //! Lock order: 4 (TaskQueue < ZoneManager < HealthMonitor < EventLog < StepGate).
 //!
@@ -17,12 +15,11 @@ use std::time::Instant;
 
 use crate::types::{RobotId, TaskId, ZoneId};
 
+// EventKind
+// ---------------------------------------------------------------------------
 
-/// EventKind
-
-/// Discriminated union of every event the system can produce.
-///
-/// All fields are `Copy` types so the whole enum is `Copy`.
+/// Every event that Blaze can emit.
+/// All payload fields are `Copy`, so this enum is cheap to copy as well.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EventKind {
     RobotStarted { robot_id: RobotId },
@@ -63,6 +60,7 @@ impl EventCategory {
     }
 }
 
+
 impl EventKind {
     /// Return the category of this event kind.
     pub fn category(&self) -> EventCategory {
@@ -94,6 +92,8 @@ impl EventKind {
         }
     }
 }
+
+
 
 impl fmt::Display for EventKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -134,10 +134,11 @@ impl fmt::Display for EventKind {
 }
 
 
-///EventLog
 
+// EventLog
+// -----------------------------------------------------------------------
 
-/// A single recorded event with a timestamp.
+/// One recorded event with a timestamp.
 pub struct Event {
     pub timestamp: Instant,
     pub kind: EventKind,
@@ -158,7 +159,9 @@ pub struct EventLog {
     start: Instant,
 }
 
+
 impl EventLog {
+    /// Creates an empty event log.
     pub fn new() -> Self {
         Self {
             events: Mutex::new(Vec::new()),
@@ -166,7 +169,7 @@ impl EventLog {
         }
     }
 
-    /// Record an event with the current timestamp.
+    /// Appends one event with the current timestamp.
     pub fn log(&self, kind: EventKind) {
         let mut guard = self.events.lock().expect("event log lock poisoned");
         guard.push(Event {
@@ -175,19 +178,24 @@ impl EventLog {
         });
     }
 
-    /// Return a snapshot of all recorded events (clones the kind, copies the timestamp).
+
+
+    /// Returns a snapshot of event kinds in insertion order.
     pub fn events(&self) -> Vec<EventKind> {
         let guard = self.events.lock().expect("event log lock poisoned");
         guard.iter().map(|e| e.kind).collect()
     }
 
-    /// Check whether any recorded event satisfies `predicate`.
+
+
+    /// Returns `true` if any event matches `predicate`.
     pub fn has_event(&self, predicate: impl Fn(&EventKind) -> bool) -> bool {
         let guard = self.events.lock().expect("event log lock poisoned");
         guard.iter().any(|e| predicate(&e.kind))
     }
 
-    /// Return a human-readable dump of all events with relative timestamps.
+
+    /// Formats all events with relative timestamps for printing.
     pub fn dump(&self) -> String {
         let guard = self.events.lock().expect("event log lock poisoned");
         let mut buf = String::new();
@@ -201,6 +209,8 @@ impl EventLog {
         }
         buf
     }
+
+
 
     /// Return event dump with category tags for terminal demos
     pub fn dump_pretty(&self) -> String {
@@ -219,6 +229,8 @@ impl EventLog {
         buf
     }
 
+
+
     /// Return export-friendly timeline rows.
     pub fn timeline(&self) -> Vec<TimelineRow> {
         let guard = self.events.lock().expect("event log lock poisoned");
@@ -232,6 +244,8 @@ impl EventLog {
             })
             .collect()
     }
+
+
 
     /// Return the number of events recorded so far.
     pub fn event_count(&self) -> usize {
@@ -253,6 +267,8 @@ impl EventLog {
             })
             .collect()
     }
+
+
 
     /// Serialize incremental events to JSON for the web API.
     pub fn events_json_since(&self, start_index: usize) -> String {
@@ -288,6 +304,7 @@ impl EventLog {
         out
     }
 }
+
 
 fn json_escape_event(buf: &mut String, s: &str) {
     for ch in s.chars() {

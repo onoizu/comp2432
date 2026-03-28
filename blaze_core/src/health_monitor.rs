@@ -1,20 +1,23 @@
-//! Health monitoring via periodic heartbeats.
+//! Tracks robot health using heartbeats.
 //!
-//! Each robot is expected to call [`heartbeat`](HeartbeatRegistry::heartbeat)
-//! periodically.  A background monitor thread calls
-//! [`check_timeouts`](HeartbeatRegistry::check_timeouts) to detect robots
-//! that have gone silent and marks them as `Offline`.
+//! Robots should call `heartbeat` regularly. A monitor thread calls
+//! `check_timeouts` to find robots that stopped sending heartbeats and marks
+//! them `Offline`.
 //!
-//! Once a robot is marked `Offline` it stays `Offline` , there is no automatic recovery.
+//! In this project, offline robots stay offline until restart.
+//! This matches the PDF demo requirement: show at least one robot timing out.
 //!
 //! Lock order: 3 (TaskQueue < ZoneManager < HealthMonitor < EventLog < StepGate).
+
 
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use crate::traits::HeartbeatRegistry;
+
 use crate::types::{RobotId, RobotStatus, TaskId, ZoneId};
+
 
 /// Immutable per-robot health snapshot for dashboard rendering.
 #[derive(Debug, Clone, Copy)]
@@ -25,7 +28,8 @@ pub struct RobotHealthSnapshot {
     pub current_zone: Option<ZoneId>,
 }
 
-/// Per-robot health record.
+
+/// Health data for one robot.
 pub struct RobotHealth {
     pub last_seen: Instant,
     pub status: RobotStatus,
@@ -33,16 +37,15 @@ pub struct RobotHealth {
     pub current_zone: Option<ZoneId>,
 }
 
-/// Thread-safe registry of robot health records.
+
+/// Thread-safe table of robot health records.
 pub struct HealthMonitor {
     registry: Mutex<HashMap<RobotId, RobotHealth>>,
     timeout: Duration,
 }
 
 impl HealthMonitor {
-    /// Create a new monitor with the given heartbeat timeout.
-    ///
-    /// `timeout` is the maximum silent duration before a robot is marked offline.
+    /// Creates a monitor with a heartbeat timeout.
     pub fn new(timeout: Duration) -> Self {
         Self {
             registry: Mutex::new(HashMap::new()),
@@ -50,7 +53,8 @@ impl HealthMonitor {
         }
     }
 
-    /// Update the current task for `robot`.
+
+    /// Updates the task currently assigned to `robot`.
     pub fn update_task(&self, robot: RobotId, task_id: Option<TaskId>) {
         let mut guard = self.registry.lock().expect("health monitor lock poisoned");
         if let Some(entry) = guard.get_mut(&robot) {
@@ -58,13 +62,14 @@ impl HealthMonitor {
         }
     }
 
-    /// Update the current zone for `robot`
+    /// Updates the zone currently occupied by `robot`.
     pub fn update_zone(&self, robot: RobotId, zone: Option<ZoneId>) {
         let mut guard = self.registry.lock().expect("health monitor lock poisoned");
         if let Some(entry) = guard.get_mut(&robot) {
             entry.current_zone = zone;
         }
     }
+
 
     /// Return immutable snapshots for all registered robots.
     pub fn snapshot(&self) -> Vec<RobotHealthSnapshot> {
@@ -83,6 +88,7 @@ impl HealthMonitor {
     }
 }
 
+
 impl HeartbeatRegistry for HealthMonitor {
     fn register(&self, robot: RobotId) {
         let mut guard = self.registry.lock().expect("health monitor lock poisoned");
@@ -94,6 +100,7 @@ impl HeartbeatRegistry for HealthMonitor {
         });
     }
 
+
     fn heartbeat(&self, robot: RobotId) {
         let mut guard = self.registry.lock().expect("health monitor lock poisoned");
         if let Some(entry) = guard.get_mut(&robot) {
@@ -103,11 +110,13 @@ impl HeartbeatRegistry for HealthMonitor {
         }
     }
 
+
     fn status(&self, robot: RobotId) -> Option<RobotStatus> {
         let guard = self.registry.lock().expect("health monitor lock poisoned");
         guard.get(&robot).map(|h| h.status)
     }
 
+    
     fn check_timeouts(&self) -> Vec<RobotId> {
         let mut guard = self.registry.lock().expect("health monitor lock poisoned");
         let now = Instant::now();

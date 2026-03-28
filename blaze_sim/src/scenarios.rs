@@ -1,14 +1,17 @@
 //! Pre-built demo scenarios.
 //!
-//! Each function returns a `Vec<Task>` (and optionally extra metadata)
-//! that can be fed into a [`Coordinator`](blaze_core::coordinator::Coordinator).
+//! Each function returns tasks that can be submitted directly to a
+//! `Coordinator`.
+//! The three scenarios map to the PDF demo checklist:
+//! concurrent work, zone conflict, and timeout detection.
 
 use blaze_core::task::Task;
 use blaze_core::types::{TaskKind, TaskPriority, ZoneId};
 
-/// Basic delivery scenario — 3 tasks in different zones, 1 urgent.
+/// Basic mixed workload across different zones.
 ///
-/// Demonstrates parallel execution and priority scheduling.
+/// Good first run: robots can work in parallel because most tasks target
+/// different places.
 pub fn basic_delivery() -> Vec<Task> {
     vec![
         Task::new(TaskPriority::Urgent, TaskKind::Emergency, ZoneId::EmergencyRoom, 40),
@@ -17,9 +20,9 @@ pub fn basic_delivery() -> Vec<Task> {
     ]
 }
 
-/// Zone-conflict scenario — 3 tasks all target WardA.
+/// Zone-conflict workload where many tasks target the same zone.
 ///
-/// Demonstrates mutex: only one robot enters at a time, others wait.
+/// Shows the lock behavior: only one robot is allowed in `WardA` at a time.
 pub fn zone_conflict() -> Vec<Task> {
     vec![
         Task::new(TaskPriority::Normal, TaskKind::Delivery, ZoneId::WardA, 60),
@@ -28,16 +31,10 @@ pub fn zone_conflict() -> Vec<Task> {
     ]
 }
 
-/// Timeout demo scenario — staggered two-phase design.
+/// Timeout demo workload.
 ///
-/// Phase 1: R0 and R1 receive `initial_tasks` and enter their zones.
-/// Phase 2: After a delay, R2 is spawned and receives `late_task` (WardB).
-///          WardB is already occupied by R0, so R2 must wait. R2 then times
-///          out, reclaims the task, and another robot re-executes it.
-///
-/// # Returns
-///
-/// `(initial_tasks, late_task, fail_robot_id)`
+/// Returns initial tasks, a late task, and the robot ID that should be forced
+/// to "fail" (stop heartbeats) so the monitor can detect a timeout.
 pub fn timeout_demo() -> (Vec<Task>, Task, usize) {
     let initial_tasks = vec![
         Task::new(TaskPriority::Normal, TaskKind::Delivery, ZoneId::WardB, 5000),

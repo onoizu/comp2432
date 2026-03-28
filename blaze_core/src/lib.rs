@@ -1,7 +1,7 @@
-//! blaze_core — Core library for Project Blaze.
+//! Core library for Project Blaze.
 //!
-//! This crate contains all scoring-relevant logic: task queue, zone access
-//! control, health monitoring, robot worker logic, and the coordinator.
+//! This crate follows the minimal scope in the Project-B OS brief:
+//! task queue, zone access control, health monitoring, and coordination.
 
 pub mod types;
 pub mod errors;
