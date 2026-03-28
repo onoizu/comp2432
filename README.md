@@ -197,9 +197,3 @@ cargo test -p blaze_core
 cargo test -p blaze_app
 cargo test -p blaze_sim
 ```
-
----
-
-## License
-
-MIT or as specified by your course.
